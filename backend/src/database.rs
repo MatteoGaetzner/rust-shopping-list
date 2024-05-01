@@ -35,6 +35,7 @@ impl InMemoryDatabase {
     }
 
     fn get_list(&self, list_uuid: &str) -> Option<&ShoppingList> {
+        println!("{list_uuid}");
         self.inner.get(list_uuid)
     }
 

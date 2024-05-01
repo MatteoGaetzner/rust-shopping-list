@@ -5,10 +5,10 @@ use model::PostShopItem;
 pub struct ListChanged;
 
 #[component]
-pub fn ShoppingList(change_signal: Signal<ListChanged>) -> Element {
+pub fn ShoppingList(list_uuid: Signal<String>, change_signal: Signal<ListChanged>) -> Element {
     let items_request = use_resource(move || async move {
         change_signal.read();
-        get_items().await
+        get_items(list_uuid.read().as_str()).await
     });
 
     match &*items_request.read_unchecked() {
@@ -23,7 +23,8 @@ pub fn ShoppingList(change_signal: Signal<ListChanged>) -> Element {
                             ShoppingListItemComponent{
                                 display_name: &item.title,
                                 posted_by: &item.posted_by,
-                                item_id: &item.uuid,
+                                list_uuid,
+                                item_uuid: &item.uuid,
                                 change_signal: change_signal
                             },
                         }
@@ -52,7 +53,8 @@ pub fn ShoppingList(change_signal: Signal<ListChanged>) -> Element {
 pub fn ShoppingListItemComponent(
     display_name: String,
     posted_by: String,
-    item_id: String,
+    list_uuid: Signal<String>,
+    item_uuid: String,
     change_signal: Signal<ListChanged>,
 ) -> Element {
     rsx! {
@@ -65,13 +67,13 @@ pub fn ShoppingListItemComponent(
             span {
                 "posted by {posted_by}"
             }
-            ItemDeleteButton {item_id, change_signal}
+            ItemDeleteButton {list_uuid, item_uuid, change_signal}
         }
     }
 }
 
 #[component]
-pub fn ItemInput(change_signal: Signal<ListChanged>) -> Element {
+pub fn ItemInput(list_uuid: Signal<String>, change_signal: Signal<ListChanged>) -> Element {
     let mut item = use_signal(|| "".to_string());
     let mut author = use_signal(|| "".to_string());
 
@@ -80,10 +82,13 @@ pub fn ItemInput(change_signal: Signal<ListChanged>) -> Element {
             async move {
                 let item_name = item.read().to_string();
                 let author = author.read().to_string();
-                let response = post_item(PostShopItem {
-                    title: item_name,
-                    posted_by: author,
-                })
+                let response = post_item(
+                    list_uuid.read().as_str(),
+                    PostShopItem {
+                        title: item_name,
+                        posted_by: author,
+                    },
+                )
                 .await;
 
                 if response.is_ok() {
@@ -132,12 +137,16 @@ pub fn ItemInput(change_signal: Signal<ListChanged>) -> Element {
 }
 
 #[component]
-fn ItemDeleteButton(item_id: String, change_signal: Signal<ListChanged>) -> Element {
+fn ItemDeleteButton(
+    list_uuid: Signal<String>,
+    item_uuid: String,
+    change_signal: Signal<ListChanged>,
+) -> Element {
     let onclick = move |_| {
         spawn({
-            let item_id = item_id.clone();
+            let item_uuid = item_uuid.clone();
             async move {
-                let response = delete_item(&item_id).await;
+                let response = delete_item(list_uuid.read().as_str(), &item_uuid).await;
                 if response.is_ok() {
                     change_signal.write();
                 }

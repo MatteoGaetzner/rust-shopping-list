@@ -2,38 +2,23 @@ use crate::database::ShoppingItem;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::{response::IntoResponse, Json};
-use model::{PostShopItem, ShoppingListItem};
+use model::{CreateListResponse, PostShopItem, ShoppingListItem};
 use uuid::Uuid;
 
 use crate::Database;
 
-const LIST_UUID: &str = "9e137e61-08ac-469d-be9d-6b3324dd20ad";
-
-pub async fn get_items(State(state): State<Database>) -> impl IntoResponse {
-    let items: Vec<ShoppingListItem> = state.read().unwrap().as_vec(LIST_UUID);
+pub async fn get_items(
+    State(state): State<Database>,
+    Path(list_uuid): Path<Uuid>,
+) -> impl IntoResponse {
+    let items: Vec<ShoppingListItem> = state.read().unwrap().as_vec(&list_uuid.to_string());
 
     Json(items)
 }
 
-// pub async fn get_items(State(state): State<Database>) -> impl IntoResponse {
-//     let result: Vec<ShoppingListItem> = state
-//         .read()
-//         .unwrap()
-//         .as_vec()
-//         .iter()
-//         .cloned()
-//         .map(|(uuid, item)| ShoppingListItem {
-//             title: item.title,
-//             posted_by: item.creator,
-//             uuid,
-//         })
-//         .collect();
-//
-//     Json(result)
-// }
-//
 pub async fn add_item(
     State(state): State<Database>,
+    Path(list_uuid): Path<Uuid>,
     Json(post_request): Json<PostShopItem>,
 ) -> impl IntoResponse {
     let item = ShoppingItem {
@@ -46,7 +31,7 @@ pub async fn add_item(
         return (StatusCode::SERVICE_UNAVAILABLE).into_response();
     };
 
-    db.insert_item(LIST_UUID, &uuid, item);
+    db.insert_item(&list_uuid.to_string(), &uuid, item);
 
     (
         StatusCode::OK,
@@ -61,12 +46,18 @@ pub async fn add_item(
 
 pub async fn delete_item(
     State(state): State<Database>,
-    Path(uuid): Path<Uuid>,
+    Path((list_uuid, item_uuid)): Path<(Uuid, Uuid)>,
 ) -> impl IntoResponse {
     let Ok(mut db) = state.write() else {
         return StatusCode::SERVICE_UNAVAILABLE;
     };
 
-    db.delete_item(LIST_UUID, &uuid.to_string());
+    db.delete_item(&list_uuid.to_string(), &item_uuid.to_string());
     StatusCode::OK
+}
+
+pub async fn create_shopping_list(State(state): State<Database>) -> impl IntoResponse {
+    let uuid = Uuid::new_v4().to_string();
+    state.write().unwrap().create_list(&uuid);
+    Json(CreateListResponse { uuid })
 }
